@@ -1,7 +1,23 @@
 import { Result } from "@adviser/result";
 
-export async function scopey<T>(fn: (scope: Scope) => Promise<T>, log = console.error): Promise<Result<T>> {
-  const scope = new Scope(log);
+export interface ScopeyParams {
+  readonly log: (msgs: unknown[]) => void;
+  readonly catch: (err: unknown) => Promise<void>;
+  readonly finally: () => Promise<void>;
+}
+
+export async function scopey<T>(fn: (scope: Scope) => Promise<T>, params: Partial<ScopeyParams> = {}): Promise<Result<T>> {
+  const scope = new Scope(params.log || console.error);
+  scope.onCatch(async (err) => {
+    if (params.catch) {
+      params.catch(err);
+    }
+  });
+  scope.onFinally(async () => {
+    if (params.finally) {
+      params.finally();
+    }
+  });
   try {
     return Promise.resolve(Result.Ok(await fn(scope)));
   } catch (err) {
@@ -32,7 +48,7 @@ export class EvalBuilder<T> {
     this.cleanupFn = fn;
     return this;
   }
-  catch(fn: (err: Error) => Promise<void>): this {
+  catch(fn: (err: unknown) => Promise<void>): this {
     this.catchFn = fn;
     return this;
   }
@@ -79,8 +95,8 @@ export class Scope {
   onCleanup<T>(fn: (ctx: T) => Promise<void>) {
     this.cleanups.push(fn as (ctx: unknown) => Promise<void>);
   }
-  catchFns: ((err: Error) => Promise<void>)[] = [];
-  onCatch(fn: () => Promise<void>) {
+  catchFns: ((err: unknown) => Promise<void>)[] = [];
+  onCatch(fn: (err: unknown) => Promise<void>) {
     this.catchFns.push(fn);
   }
   finallys: (() => Promise<void>)[] = [];
@@ -101,7 +117,7 @@ export class Scope {
   async handleCatch<T = unknown>(err: unknown): Promise<Result<T>> {
     for (const fn of this.catchFns.reverse()) {
       try {
-        await fn(err as Error);
+        await fn(err);
       } catch (err) {
         this.log(`Scope error in catch: ${err}`);
       }
