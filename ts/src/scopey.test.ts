@@ -194,7 +194,7 @@ it("a scopey with throw in second eval throws in catch", async () => {
     async (scope) => {
       const test = await scope
         .eval(async () => {
-          first.eval(evalOrder++);
+          throw Error("my error");
           return {
             db: {
               close: first.close,
@@ -699,4 +699,48 @@ it("a scopey happy path with global throw", async () => {
   expect(second.finally.mock.calls).toEqual([[1]]);
   expect(third.finally).toHaveBeenCalledTimes(1);
   expect(third.finally.mock.calls).toEqual([[0]]);
+});
+
+it("scopy with doResult error", async () => {
+  const ret = await scopey(async (scope) => {
+    const errors: Error[] = [];
+    for (let i = 0; i < 10; i++) {
+      const rtest = await scope
+        .eval(async () => {
+          throwsError();
+        })
+        .doResult();
+      expect(rtest.isErr()).toBeTruthy();
+      expect(rtest.unwrap_err()).toEqual(new Error("my error"));
+      errors.push(rtest.unwrap_err());
+    }
+    return {
+      oks: [],
+      errors: errors,
+    };
+  });
+  expect(ret.Ok().errors.length).toEqual(10);
+  expect(ret.Ok().oks.length).toEqual(0);
+});
+
+it("scopy with doResult ok", async () => {
+  const ret = await scopey(async (scope) => {
+    const oks = [];
+    for (let i = 0; i < 10; i++) {
+      const rtest = await scope
+        .eval(async () => {
+          return { wurst: 4 };
+        })
+        .doResult();
+      expect(rtest.isErr()).toBeFalsy();
+      expect(rtest.unwrap()).toEqual({ wurst: 4 });
+      oks.push(rtest.unwrap());
+    }
+    return {
+      oks,
+      errors: [],
+    };
+  });
+  expect(ret.Ok().oks.length).toEqual(10);
+  expect(ret.Ok().errors.length).toEqual(0);
 });

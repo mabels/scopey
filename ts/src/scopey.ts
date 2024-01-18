@@ -80,6 +80,14 @@ export class EvalBuilder<T> {
       });
     }
   }
+
+  async doResult(): Promise<Result<T>> {
+    try {
+      return Result.Ok(await this.do());
+    } catch (err) {
+      return Result.Err(err as Error);
+    }
+  }
 }
 
 export class Scope {
