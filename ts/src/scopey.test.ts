@@ -1,5 +1,5 @@
 import exp from "constants";
-import { scopey } from "./scopey";
+import { Scope, scopey } from "./scopey";
 
 function throwsError() {
   throw new Error("my error");
@@ -865,8 +865,10 @@ it("scopy rollback loop with drop", async () => {
   const loop = jest.fn();
   const loopCatch = jest.fn();
   const loopCleanup = jest.fn();
+  let gscope: Scope|undefined = undefined
 
   const ret = await scopey(async (scope) => {
+    gscope = scope
     await scope.eval(async () => {
       top(count);
       return { wurst: count++ };
@@ -895,6 +897,10 @@ it("scopy rollback loop with drop", async () => {
       errors: [],
     };
   });
+
+  expect(gscope!.cleanups.length).toEqual(0)
+  expect(gscope!.finallys.length).toEqual(0)
+  expect(gscope!.catchFns.length).toEqual(0)
 
   expect(ret.isErr()).toBeTruthy();
   expect(ret.unwrap_err()).toEqual(new Error("my error"));
@@ -965,6 +971,7 @@ it("scopy rollback loop with drop", async () => {
     ],
 
   ]);
+
   expect(loopCatch.mock.calls).toEqual([[11]]);
   expect(top.mock.calls).toEqual([[0]]);
   expect(topCleanup.mock.calls).toEqual([[17, { wurst: 0 }]]);
