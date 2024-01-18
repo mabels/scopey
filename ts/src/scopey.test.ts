@@ -1,3 +1,4 @@
+import exp from "constants";
 import { scopey } from "./scopey";
 
 function throwsError() {
@@ -199,7 +200,7 @@ it("a scopey with throw in second eval throws in catch", async () => {
             db: {
               close: first.close,
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              update: (s: string) => {},
+              update: (s: string) => { },
             },
           };
         })
@@ -347,7 +348,7 @@ it("a scopey with throw in second eval", async () => {
             db: {
               close: first.close,
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              update: (s: string) => {},
+              update: (s: string) => { },
             },
           };
         })
@@ -725,7 +726,7 @@ it("scopy with doResult error", async () => {
 
 it("scopy with doResult ok", async () => {
   const ret = await scopey(async (scope) => {
-    const oks = [];
+    const oks: { wurst: number }[] = [];
     for (let i = 0; i < 10; i++) {
       const rtest = await scope
         .eval(async () => {
@@ -744,3 +745,227 @@ it("scopy with doResult ok", async () => {
   expect(ret.Ok().oks.length).toEqual(10);
   expect(ret.Ok().errors.length).toEqual(0);
 });
+
+it("scopy rollback loop", async () => {
+  const top = jest.fn();
+  const topCleanup = jest.fn();
+  let count = 0
+  const loop = jest.fn();
+  const loopCatch = jest.fn();
+  const loopCleanup = jest.fn();
+
+  const ret = await scopey(async (scope) => {
+    await scope.eval(async () => {
+      top(count);
+      return { wurst: count++ };
+    }).cleanup(async (ctx) => {
+      topCleanup(count++, ctx);
+    }).do();
+    for (let i = 0; i < 10; i++) {
+      const rtest = await scope
+        .eval(async () => {
+          if (i === 5) {
+            throwsError();
+          }
+          return { wurst: count++ };
+        }).catch(async () => {
+          loopCatch(count++);
+        })
+        .cleanup(async (ctx) => {
+          loopCleanup(count++, ctx)
+        })
+        .do()
+      loop(count++, rtest)
+    }
+    return {
+      oks: [],
+      errors: [],
+    };
+  });
+
+  expect(ret.isErr()).toBeTruthy();
+  expect(ret.unwrap_err()).toEqual(new Error("my error"));
+  expect(loop.mock.calls).toEqual([
+    [
+      2,
+      {
+        "wurst": 1,
+      },
+    ],
+    [
+      4,
+      {
+        "wurst": 3,
+      },
+    ],
+    [
+      6,
+      {
+        "wurst": 5,
+      },
+    ],
+    [
+      8,
+      {
+        "wurst": 7,
+      },
+    ],
+    [
+      10,
+      {
+        "wurst": 9,
+      },
+    ],
+  ]
+
+  );
+  expect(loopCleanup.mock.calls).toEqual([
+    [
+      12,
+      {
+        "wurst": 9,
+      },
+    ],
+    [
+      13,
+      {
+        "wurst": 7,
+      },
+    ],
+    [
+      14,
+      {
+        "wurst": 5,
+      },
+    ],
+    [
+      15,
+      {
+        "wurst": 3,
+      },
+    ],
+    [
+      16,
+      {
+        "wurst": 1,
+      },
+    ],
+
+  ]);
+  expect(loopCatch.mock.calls).toEqual([[11]]);
+  expect(top.mock.calls).toEqual([[0]]);
+  expect(topCleanup.mock.calls).toEqual([[17, { wurst: 0 }]]);
+})
+
+
+it("scopy rollback loop with drop", async () => {
+  const top = jest.fn();
+  const topCleanup = jest.fn();
+  let count = 0
+  const loop = jest.fn();
+  const loopCatch = jest.fn();
+  const loopCleanup = jest.fn();
+
+  const ret = await scopey(async (scope) => {
+    await scope.eval(async () => {
+      top(count);
+      return { wurst: count++ };
+    }).cleanup(async (ctx) => {
+      topCleanup(count++, ctx);
+    }).do();
+    for (let i = 0; i < 10; i++) {
+      const rtest = await scope
+        .eval(async () => {
+          if (i === 5) {
+            throwsError();
+          }
+          return { wurst: count++ };
+        }).catch(async () => {
+          loopCatch(count++);
+        })
+        .cleanup(async (ctx) => {
+          loopCleanup(count++, ctx)
+        })
+        .withDropOnSuccess()
+        .do()
+      loop(count++, rtest)
+    }
+    return {
+      oks: [],
+      errors: [],
+    };
+  });
+
+  expect(ret.isErr()).toBeTruthy();
+  expect(ret.unwrap_err()).toEqual(new Error("my error"));
+  expect(loop.mock.calls).toEqual([
+    [
+      2,
+      {
+        "wurst": 1,
+      },
+    ],
+    [
+      4,
+      {
+        "wurst": 3,
+      },
+    ],
+    [
+      6,
+      {
+        "wurst": 5,
+      },
+    ],
+    [
+      8,
+      {
+        "wurst": 7,
+      },
+    ],
+    [
+      10,
+      {
+        "wurst": 9,
+      },
+    ],
+  ]
+
+  );
+  expect(loopCleanup.mock.calls).toEqual([
+    [
+      12,
+      {
+        "wurst": 9,
+      },
+    ],
+    [
+      13,
+      {
+        "wurst": 7,
+      },
+    ],
+    [
+      14,
+      {
+        "wurst": 5,
+      },
+    ],
+    [
+      15,
+      {
+        "wurst": 3,
+      },
+    ],
+    [
+      16,
+      {
+        "wurst": 1,
+      },
+    ],
+
+  ]);
+  expect(loopCatch.mock.calls).toEqual([[11]]);
+  expect(top.mock.calls).toEqual([[0]]);
+  expect(topCleanup.mock.calls).toEqual([[17, { wurst: 0 }]]);
+})

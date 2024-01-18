@@ -38,10 +38,16 @@ export class EvalBuilder<T> {
   catchFn = async (err: Error): Promise<void> => {};
   finallyFn: () => Promise<void> = async () => {};
   readonly id = evaId++;
+  #withDropOnSuccess = false;
 
   constructor(scope: Scope, fn: () => Promise<T>) {
     this.evalFn = fn;
     this.scope = scope;
+  }
+
+  withDropOnSuccess(): this {
+    this.#withDropOnSuccess = true;
+    return this
   }
 
   cleanup(fn: (t: WithoutPromise<T>) => Promise<void>): this {
@@ -58,16 +64,18 @@ export class EvalBuilder<T> {
   }
   async do(): Promise<T> {
     let ctx: T | undefined;
+    let removeOnCatch: (() => void) | undefined = undefined
+    let removeOnFinally: () => void = () => {};
     try {
       ctx = await this.evalFn();
       return ctx;
     } catch (err) {
-      this.scope.onCatch(async () => {
+      removeOnCatch = this.scope.onCatch(async () => {
         return this.catchFn(err as Error);
       });
       throw err;
     } finally {
-      this.scope.onFinally(async () => {
+      removeOnFinally = this.scope.onFinally(async () => {
         if (ctx) {
           try {
             await this.cleanupFn(ctx as WithoutPromise<T>);
@@ -78,6 +86,10 @@ export class EvalBuilder<T> {
         await this.finallyFn();
         return;
       });
+    }
+    if (this.#withDropOnSuccess) {
+      removeOnCatch?.();
+      removeOnFinally();
     }
   }
 
@@ -104,12 +116,16 @@ export class Scope {
     this.cleanups.push(fn as (ctx: unknown) => Promise<void>);
   }
   catchFns: ((err: unknown) => Promise<void>)[] = [];
-  onCatch(fn: (err: unknown) => Promise<void>) {
+  onCatch(fn: (err: unknown) => Promise<void>) : () => void {
     this.catchFns.push(fn);
+    return () => {
+    }
   }
   finallys: (() => Promise<void>)[] = [];
-  onFinally(fn: () => Promise<void>) {
+  onFinally(fn: () => Promise<void>) : () => void{
     this.finallys.push(fn);
+    return () => {
+    }
   }
 
   async handleFinally(): Promise<void> {
