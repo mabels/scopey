@@ -1,5 +1,4 @@
-import exp from "constants";
-import { Scope, scopey } from "./scopey";
+import { Scope, ScopeIdFn, scopey } from "./scopey";
 
 function throwsError() {
   throw new Error("my error");
@@ -200,7 +199,7 @@ it("a scopey with throw in second eval throws in catch", async () => {
             db: {
               close: first.close,
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              update: (s: string) => { },
+              update: (s: string) => {},
             },
           };
         })
@@ -348,7 +347,7 @@ it("a scopey with throw in second eval", async () => {
             db: {
               close: first.close,
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              update: (s: string) => { },
+              update: (s: string) => {},
             },
           };
         })
@@ -749,18 +748,21 @@ it("scopy with doResult ok", async () => {
 it("scopy rollback loop", async () => {
   const top = jest.fn();
   const topCleanup = jest.fn();
-  let count = 0
+  let count = 0;
   const loop = jest.fn();
   const loopCatch = jest.fn();
   const loopCleanup = jest.fn();
 
   const ret = await scopey(async (scope) => {
-    await scope.eval(async () => {
-      top(count);
-      return { wurst: count++ };
-    }).cleanup(async (ctx) => {
-      topCleanup(count++, ctx);
-    }).do();
+    await scope
+      .eval(async () => {
+        top(count);
+        return { wurst: count++ };
+      })
+      .cleanup(async (ctx) => {
+        topCleanup(count++, ctx);
+      })
+      .do();
     for (let i = 0; i < 10; i++) {
       const rtest = await scope
         .eval(async () => {
@@ -768,14 +770,15 @@ it("scopy rollback loop", async () => {
             throwsError();
           }
           return { wurst: count++ };
-        }).catch(async () => {
+        })
+        .catch(async () => {
           loopCatch(count++);
         })
         .cleanup(async (ctx) => {
-          loopCleanup(count++, ctx)
+          loopCleanup(count++, ctx);
         })
-        .do()
-      loop(count++, rtest)
+        .do();
+      loop(count++, rtest);
     }
     return {
       oks: [],
@@ -789,92 +792,91 @@ it("scopy rollback loop", async () => {
     [
       2,
       {
-        "wurst": 1,
+        wurst: 1,
       },
     ],
     [
       4,
       {
-        "wurst": 3,
+        wurst: 3,
       },
     ],
     [
       6,
       {
-        "wurst": 5,
+        wurst: 5,
       },
     ],
     [
       8,
       {
-        "wurst": 7,
+        wurst: 7,
       },
     ],
     [
       10,
       {
-        "wurst": 9,
+        wurst: 9,
       },
     ],
-  ]
-
-  );
+  ]);
   expect(loopCleanup.mock.calls).toEqual([
     [
       12,
       {
-        "wurst": 9,
+        wurst: 9,
       },
     ],
     [
       13,
       {
-        "wurst": 7,
+        wurst: 7,
       },
     ],
     [
       14,
       {
-        "wurst": 5,
+        wurst: 5,
       },
     ],
     [
       15,
       {
-        "wurst": 3,
+        wurst: 3,
       },
     ],
     [
       16,
       {
-        "wurst": 1,
+        wurst: 1,
       },
     ],
-
   ]);
   expect(loopCatch.mock.calls).toEqual([[11]]);
   expect(top.mock.calls).toEqual([[0]]);
   expect(topCleanup.mock.calls).toEqual([[17, { wurst: 0 }]]);
-})
-
+});
 
 it("scopy rollback loop with drop", async () => {
   const top = jest.fn();
   const topCleanup = jest.fn();
-  let count = 0
+  let count = 0;
   const loop = jest.fn();
   const loopCatch = jest.fn();
   const loopCleanup = jest.fn();
-  let gscope: Scope|undefined = undefined
+  let gscope: Scope | undefined = undefined;
 
   const ret = await scopey(async (scope) => {
-    gscope = scope
-    await scope.eval(async () => {
-      top(count);
-      return { wurst: count++ };
-    }).cleanup(async (ctx) => {
-      topCleanup(count++, ctx);
-    }).do();
+    gscope = scope;
+    await scope
+      .eval(async () => {
+        top(count);
+        return { wurst: count++ };
+      })
+      .cleanup(async (ctx) => {
+        topCleanup(count++, ctx);
+      })
+      .do();
     for (let i = 0; i < 10; i++) {
       const rtest = await scope
         .eval(async () => {
@@ -882,15 +884,16 @@ it("scopy rollback loop with drop", async () => {
             throwsError();
           }
           return { wurst: count++ };
-        }).catch(async () => {
+        })
+        .catch(async () => {
           loopCatch(count++);
         })
         .cleanup(async (ctx) => {
-          loopCleanup(count++, ctx)
+          loopCleanup(count++, ctx);
         })
         .withDropOnSuccess()
-        .do()
-      loop(count++, rtest)
+        .do();
+      loop(count++, rtest);
     }
     return {
       oks: [],
@@ -898,81 +901,113 @@ it("scopy rollback loop with drop", async () => {
     };
   });
 
-  expect(gscope!.cleanups.length).toEqual(0)
-  expect(gscope!.finallys.length).toEqual(0)
-  expect(gscope!.catchFns.length).toEqual(0)
+  expect(gscope!.cleanups.length).toEqual(0);
+  expect(gscope!.finallys.length).toEqual(2);
+  expect(gscope!.catchFns.length).toEqual(1);
 
   expect(ret.isErr()).toBeTruthy();
   expect(ret.unwrap_err()).toEqual(new Error("my error"));
   expect(loop.mock.calls).toEqual([
     [
-      2,
+      3,
       {
-        "wurst": 1,
-      },
-    ],
-    [
-      4,
-      {
-        "wurst": 3,
+        wurst: 1,
       },
     ],
     [
       6,
       {
-        "wurst": 5,
+        wurst: 4,
       },
     ],
     [
-      8,
+      9,
       {
-        "wurst": 7,
+        wurst: 7,
       },
     ],
-    [
-      10,
-      {
-        "wurst": 9,
-      },
-    ],
-  ]
-
-  );
-  expect(loopCleanup.mock.calls).toEqual([
     [
       12,
       {
-        "wurst": 9,
-      },
-    ],
-    [
-      13,
-      {
-        "wurst": 7,
-      },
-    ],
-    [
-      14,
-      {
-        "wurst": 5,
+        wurst: 10,
       },
     ],
     [
       15,
       {
-        "wurst": 3,
+        wurst: 13,
+      },
+    ],
+  ]);
+  expect(loopCleanup.mock.calls).toEqual([
+    [
+      2,
+      {
+        wurst: 1,
       },
     ],
     [
-      16,
+      5,
       {
-        "wurst": 1,
+        wurst: 4,
       },
     ],
-
+    [
+      8,
+      {
+        wurst: 7,
+      },
+    ],
+    [
+      11,
+      {
+        wurst: 10,
+      },
+    ],
+    [
+      14,
+      {
+        wurst: 13,
+      },
+    ],
   ]);
 
-  expect(loopCatch.mock.calls).toEqual([[11]]);
+  expect(loopCatch.mock.calls).toEqual([[16]]);
   expect(top.mock.calls).toEqual([[0]]);
   expect(topCleanup.mock.calls).toEqual([[17, { wurst: 0 }]]);
-})
+});
+
+it("Test UnRegisterFn", () => {
+  const scope = new Scope();
+  expect(scope.cleanups).toEqual([]);
+  expect(scope.catchFns).toEqual([]);
+  expect(scope.finallys).toEqual([]);
+
+  scope.onCleanup(async () => {});
+  scope.onCatch(async () => {});
+  scope.onFinally(async () => {});
+
+  expect(scope.cleanups.map((f: ScopeIdFn) => f._scopeId)).toEqual([0]);
+  expect(scope.catchFns.map((f: ScopeIdFn) => f._scopeId)).toEqual([1]);
+  expect(scope.finallys.map((f: ScopeIdFn) => f._scopeId)).toEqual([2]);
+
+  const uclean = scope.onCleanup(async () => {});
+  const ucatch = scope.onCatch(async () => {});
+  const ufinally = scope.onFinally(async () => {});
+
+  scope.onCleanup(async () => {});
+  scope.onCatch(async () => {});
+  scope.onFinally(async () => {});
+
+  expect(scope.cleanups.map((f: ScopeIdFn) => f._scopeId)).toEqual([0, 3, 6]);
+  expect(scope.catchFns.map((f: ScopeIdFn) => f._scopeId)).toEqual([1, 4, 7]);
+  expect(scope.finallys.map((f: ScopeIdFn) => f._scopeId)).toEqual([2, 5, 8]);
+
+  uclean();
+  ucatch();
+  ufinally();
+
+  expect(scope.cleanups.map((f: ScopeIdFn) => f._scopeId)).toEqual([0, 6]);
+  expect(scope.catchFns.map((f: ScopeIdFn) => f._scopeId)).toEqual([1, 7]);
+  expect(scope.finallys.map((f: ScopeIdFn) => f._scopeId)).toEqual([2, 8]);
+});

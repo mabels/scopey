@@ -47,7 +47,7 @@ export class EvalBuilder<T> {
 
   withDropOnSuccess(): this {
     this.#withDropOnSuccess = true;
-    return this
+    return this;
   }
 
   cleanup(fn: (t: WithoutPromise<T>) => Promise<void>): this {
@@ -64,18 +64,20 @@ export class EvalBuilder<T> {
   }
   async do(): Promise<T> {
     let ctx: T | undefined;
-    let removeOnCatch: (() => void) | undefined = undefined
-    let removeOnFinally: () => void = () => {};
     try {
       ctx = await this.evalFn();
       return ctx;
     } catch (err) {
-      removeOnCatch = this.scope.onCatch(async () => {
-        return this.catchFn(err as Error);
-      });
+      if (!this.#withDropOnSuccess) {
+        this.scope.onCatch(async () => {
+          return this.catchFn(err as Error);
+        });
+      } else {
+        this.catchFn(err as Error);
+      }
       throw err;
     } finally {
-      removeOnFinally = this.scope.onFinally(async () => {
+      const fn = async () => {
         if (ctx) {
           try {
             await this.cleanupFn(ctx as WithoutPromise<T>);
@@ -85,11 +87,12 @@ export class EvalBuilder<T> {
         }
         await this.finallyFn();
         return;
-      });
-    }
-    if (this.#withDropOnSuccess) {
-      removeOnCatch?.();
-      removeOnFinally();
+      };
+      if (this.#withDropOnSuccess) {
+        fn();
+      } else {
+        this.scope.onFinally(fn);
+      }
     }
   }
 
@@ -102,7 +105,15 @@ export class EvalBuilder<T> {
   }
 }
 
+type VoidPromiseFn<T> = ((v?: T) => Promise<void>) & ScopeIdFn;
+type UnregisterFn = () => void;
+
+export interface ScopeIdFn {
+  _scopeId?: number;
+}
+
 export class Scope {
+  scopeId = 0;
   constructor(public readonly log = console.error) {}
   // readonly builders: EvalBuilder<unknown>[] = [];
   eval<T>(fn: () => Promise<T>): EvalBuilder<T> {
@@ -111,21 +122,31 @@ export class Scope {
     return bld;
   }
 
-  cleanups: ((ctx: unknown) => Promise<void>)[] = [];
-  onCleanup<T>(fn: (ctx: T) => Promise<void>) {
-    this.cleanups.push(fn as (ctx: unknown) => Promise<void>);
-  }
-  catchFns: ((err: unknown) => Promise<void>)[] = [];
-  onCatch(fn: (err: unknown) => Promise<void>) : () => void {
-    this.catchFns.push(fn);
+  _registerWithUnregister<T>(fn: VoidPromiseFn<T>, arr: Array<VoidPromiseFn<never>>): UnregisterFn {
+    arr.push(fn);
+    const scopeyFn = fn;
+    scopeyFn._scopeId = this.scopeId++;
     return () => {
-    }
+      const idx = (arr as unknown as (typeof scopeyFn)[]).findIndex((fn) => fn._scopeId === scopeyFn._scopeId);
+      if (idx >= 0) {
+        arr.splice(idx, 1);
+      }
+    };
   }
-  finallys: (() => Promise<void>)[] = [];
-  onFinally(fn: () => Promise<void>) : () => void{
-    this.finallys.push(fn);
-    return () => {
-    }
+
+  readonly cleanups: Array<VoidPromiseFn<never>> = [];
+  onCleanup<T>(fn: VoidPromiseFn<T>): UnregisterFn {
+    return this._registerWithUnregister(fn, this.cleanups);
+  }
+
+  readonly catchFns: Array<VoidPromiseFn<unknown | Error>> = [];
+  onCatch(fn: VoidPromiseFn<unknown | Error>): UnregisterFn {
+    return this._registerWithUnregister(fn, this.catchFns);
+  }
+
+  readonly finallys: Array<VoidPromiseFn<never>> = [];
+  onFinally(fn: VoidPromiseFn<void>): UnregisterFn {
+    return this._registerWithUnregister(fn, this.finallys);
   }
 
   async handleFinally(): Promise<void> {
