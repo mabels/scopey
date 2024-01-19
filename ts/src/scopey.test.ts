@@ -1,7 +1,7 @@
 import { Scope, ScopeIdFn, scopey } from "./scopey";
 
-function throwsError() {
-  throw new Error("my error");
+function throwsError(id?: string) {
+  throw new Error(`my error${id ? " " + id : ""}`);
 }
 
 it("a scopey is a exception in catch and finally", async () => {
@@ -116,12 +116,12 @@ it("a scopey is a exception in catch and finally", async () => {
   );
 
   expect(log.mock.calls).toEqual([
-    ["Scope error in cleanup: Error: my error"],
-    ["Scope error in finally: Error: my error"],
-    ["Scope error in cleanup: Error: my error"],
-    ["Scope error in finally: Error: my error"],
-    ["Scope error in cleanup: Error: my error"],
-    ["Scope error in finally: Error: my error"],
+    ["Scope error in cleanup(0:6): Error: my error"],
+    ["Scope error in finally(0:6): Error: my error"],
+    ["Scope error in cleanup(0:4): Error: my error"],
+    ["Scope error in finally(0:4): Error: my error"],
+    ["Scope error in cleanup(0:2): Error: my error"],
+    ["Scope error in finally(0:2): Error: my error"],
   ]);
   expect(rsc.isOk()).toBeTruthy();
   const sc = rsc.unwrap();
@@ -194,7 +194,7 @@ it("a scopey with throw in second eval throws in catch", async () => {
     async (scope) => {
       const test = await scope
         .eval(async () => {
-          throw Error("my error");
+          first.eval(evalOrder++);
           return {
             db: {
               close: first.close,
@@ -206,35 +206,36 @@ it("a scopey with throw in second eval throws in catch", async () => {
         .cleanup(async (ctx) => {
           ctx.db.close("close");
           first.cleanup(cleanupOrder++);
-          throwsError();
+          throwsError("cleanup-1");
         })
         .catch(async () => {
           first.catch(catchOrder++);
-          throwsError();
+          throwsError("catch-1");
         })
         .finally(async () => {
           first.finally(finallyOrder++);
-          throwsError();
+          throwsError("finally-1");
         })
         .do(); // as unknown as { db: { close: () => void; update: (o: string) => void } };
       expect(test.db.close).toEqual(first.close);
       await scope
         .eval(async () => {
           second.eval(evalOrder++);
+          throwsError("eval-2");
           return;
         })
         .cleanup(async () => {
           second.cleanup(cleanupOrder++);
           test.db.update(`update error table set error = 'error'`);
-          throwsError();
+          throwsError("cleanup-2");
         })
         .catch(async (err) => {
           second.catch(catchOrder++, (err as Error).message);
-          throwsError();
+          throwsError("catch-2");
         })
         .finally(async () => {
           second.finally(finallyOrder++);
-          throwsError();
+          throwsError("finally-2");
         })
         .do();
 
@@ -254,6 +255,7 @@ it("a scopey with throw in second eval throws in catch", async () => {
       return { wurst: 4 };
     },
     {
+      id: 0,
       log,
       catch: async (err) => {
         global.catch(catchOrder++, (err as Error).message);
@@ -264,10 +266,10 @@ it("a scopey with throw in second eval throws in catch", async () => {
     },
   );
   expect(log.mock.calls).toEqual([
-    ["Scope error in catch: Error: my error"],
-    ["Scope error in finally: Error: my error"],
-    ["Scope error in cleanup: Error: my error"],
-    ["Scope error in finally: Error: my error"],
+    ["Scope error in catch(0:4): Error: my error catch-2"],
+    ["Scope error in finally(0:4): Error: my error finally-2"],
+    ["Scope error in cleanup(0:2): Error: my error cleanup-1"],
+    ["Scope error in finally(0:2): Error: my error finally-1"],
   ]);
   expect(rsc.isErr()).toBeTruthy();
   const sc = rsc.unwrap_err();
@@ -978,36 +980,36 @@ it("scopy rollback loop with drop", async () => {
 });
 
 it("Test UnRegisterFn", () => {
-  const scope = new Scope();
+  const scope = new Scope({ id: 0, log: console.log });
   expect(scope.cleanups).toEqual([]);
   expect(scope.catchFns).toEqual([]);
   expect(scope.finallys).toEqual([]);
 
-  scope.onCleanup(async () => {});
-  scope.onCatch(async () => {});
-  scope.onFinally(async () => {});
+  scope.onCleanup(async () => {}, 99);
+  scope.onCatch(async () => {}, 99);
+  scope.onFinally(async () => {}, 99);
 
-  expect(scope.cleanups.map((f: ScopeIdFn) => f._scopeId)).toEqual([0]);
-  expect(scope.catchFns.map((f: ScopeIdFn) => f._scopeId)).toEqual([1]);
-  expect(scope.finallys.map((f: ScopeIdFn) => f._scopeId)).toEqual([2]);
+  expect(scope.cleanups.map((f: ScopeIdFn) => f._fnId)).toEqual([0]);
+  expect(scope.catchFns.map((f: ScopeIdFn) => f._fnId)).toEqual([1]);
+  expect(scope.finallys.map((f: ScopeIdFn) => f._fnId)).toEqual([2]);
 
-  const uclean = scope.onCleanup(async () => {});
-  const ucatch = scope.onCatch(async () => {});
-  const ufinally = scope.onFinally(async () => {});
+  const uclean = scope.onCleanup(async () => {}, 99);
+  const ucatch = scope.onCatch(async () => {}, 99);
+  const ufinally = scope.onFinally(async () => {}, 99);
 
-  scope.onCleanup(async () => {});
-  scope.onCatch(async () => {});
-  scope.onFinally(async () => {});
+  scope.onCleanup(async () => {}, 99);
+  scope.onCatch(async () => {}, 99);
+  scope.onFinally(async () => {}, 99);
 
-  expect(scope.cleanups.map((f: ScopeIdFn) => f._scopeId)).toEqual([0, 3, 6]);
-  expect(scope.catchFns.map((f: ScopeIdFn) => f._scopeId)).toEqual([1, 4, 7]);
-  expect(scope.finallys.map((f: ScopeIdFn) => f._scopeId)).toEqual([2, 5, 8]);
+  expect(scope.cleanups.map((f: ScopeIdFn) => f._fnId)).toEqual([0, 3, 6]);
+  expect(scope.catchFns.map((f: ScopeIdFn) => f._fnId)).toEqual([1, 4, 7]);
+  expect(scope.finallys.map((f: ScopeIdFn) => f._fnId)).toEqual([2, 5, 8]);
 
   uclean();
   ucatch();
   ufinally();
 
-  expect(scope.cleanups.map((f: ScopeIdFn) => f._scopeId)).toEqual([0, 6]);
-  expect(scope.catchFns.map((f: ScopeIdFn) => f._scopeId)).toEqual([1, 7]);
-  expect(scope.finallys.map((f: ScopeIdFn) => f._scopeId)).toEqual([2, 8]);
+  expect(scope.cleanups.map((f: ScopeIdFn) => f._fnId)).toEqual([0, 6]);
+  expect(scope.catchFns.map((f: ScopeIdFn) => f._fnId)).toEqual([1, 7]);
+  expect(scope.finallys.map((f: ScopeIdFn) => f._fnId)).toEqual([2, 8]);
 });
