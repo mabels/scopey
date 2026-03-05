@@ -2,23 +2,23 @@
   "name": "@adviser/scopey",
   "version": "0.0.0",
   "description": "better try/catch/finally handling",
-  "main": "src/scopey.js",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/ts/index.d.ts",
-      "import": "./dist/ts/index.js"
+      "types": "./src/scopey.d.ts",
+      "import": "./src/scopey.js"
     }
   },
   "scripts": {
     "clean": "rm -rf dist node_modules",
-    "build": "pnpm run build:js",
-    "build:js": "tsgo",
+    "build": "pnpm run build:tsgo ; pnpm run build:js ",
+    "build:tsgo": "tsgo",
+    "build:js": "rm -rf dist/pkg ; mkdir -p dist/pkg; cp -pr ./dist/ts/* dist/pkg",
     "test": "pnpm run test:js",
     "test:js": "vitest --run",
     "pubdir": "pnpm run build; rm -rf pubdir ; mkdir -p pubdir; cp -pr ../.gitignore package.json ../README.md ../LICENSE pubdir/; cd dist ; cp -pr . ../pubdir/",
-    "presmoke": "pnpm run pubdir ; cd pubdir ; pnpm pack",
-    "smoke": "cd smoke; rm -f package.json; pnpm init ; pnpm install -f ../pubdir/adviser-scopey-*.tgz; npx tsx ./smoke.ts",
+    "presmoke": "npx cement preparePubdir",
+    "smoke": "bash ./smoke/it.sh",
     "lint": "eslint . --ext .ts",
     "format": "prettier ."
   },
@@ -33,13 +33,15 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.3.3",
     "@typescript/native-preview": "7.0.0-dev.20260305.1",
+    "cmd-ts": "^0.15.0",
     "eslint": "^10.0.2",
     "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "zx": "^8.8.5"
   },
   "engines": {
     "node": ">=20"
