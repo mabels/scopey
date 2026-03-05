@@ -101,6 +101,7 @@ jobs:
           node -e 'console.log(JSON.stringify(process.env, null, 2))'
           npm publish --access public --no-git-checks $(bash ./src/cli/run.sh publishTags)
 
+      - name: Publish cement JSR
         run: |
           cd ts/pubdir
           pnpm run deno:publish
