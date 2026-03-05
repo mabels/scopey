@@ -44,7 +44,7 @@ jobs:
         run: |
           cd ts
           pnpm install
-          pnpm run prettier --check
+          pnpm run format --check
           pnpm run lint
           pnpm run build
           pnpm run test
