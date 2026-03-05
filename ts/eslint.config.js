@@ -18,7 +18,7 @@ export default tseslint.config(
   {
     ignores: [
       "to-cjs.js",
-      "smoke/smoke.cjs",
+      "smoke/smoke.ts",
       "eslint.config.js",
       "jest.config.js",
       "**/dist/",
