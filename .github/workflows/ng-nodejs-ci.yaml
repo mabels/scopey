@@ -87,7 +87,7 @@ jobs:
           pnpm install
           pnpm run build
           pnpm run presmoke
-          pnpm add -D zx cmd-ts # to make npx cement working
+          pnpm add -D zx cmd-ts
 
       #- name: pkg-pr-new preview
       #  run: cd ts/dist/pubdir && npx pkg-pr-new publish
