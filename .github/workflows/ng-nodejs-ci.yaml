@@ -87,6 +87,7 @@ jobs:
           pnpm install
           pnpm run build
           pnpm run presmoke
+          pnpm add -D zx cmd-ts # to make npx cement working
 
       #- name: pkg-pr-new preview
       #  run: cd ts/dist/pubdir && npx pkg-pr-new publish
@@ -96,9 +97,9 @@ jobs:
           cd ts/dist/pubdir
           npm install -g npm@11
           npm --version
-          bash ./src/cli/run.sh publishTags
+          npx cement publishTags
           node -e 'console.log(JSON.stringify(process.env, null, 2))'
-          npm publish --access public --no-git-checks $(bash ./src/cli/run.sh publishTags)
+          npm publish --access public --no-git-checks $(npx cement publishTags)
 
       - name: Publish cement JSR
         run: |
