@@ -84,7 +84,6 @@ jobs:
       - name: preview 
         run: |
           cd ts
-          pnpm remove playwright-chromium
           pnpm install
           pnpm run build
           pnpm run presmoke
@@ -94,7 +93,7 @@ jobs:
 
       - name: Publish cement NPM
         run: |
-          cd ts/pubdir
+          cd ts/dist/pubdir
           npm install -g npm@11
           npm --version
           bash ./src/cli/run.sh publishTags
@@ -103,5 +102,5 @@ jobs:
 
       - name: Publish cement JSR
         run: |
-          cd ts/pubdir
+          cd ts/dist/pubdir
           pnpm run deno:publish
