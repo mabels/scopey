@@ -29,6 +29,10 @@
   "bugs": {
     "url": "https://github.com/mabels/scopey/issues"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mabels/scopey"
+  },
   "homepage": "https://github.com/mabels/scopey#readme",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
