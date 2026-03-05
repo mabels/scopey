@@ -196,7 +196,7 @@ it("a scopey with throw in second eval throws in catch", async () => {
   const rsc = await scopey(
     async (scope) => {
       const test = await scope
-        .eval((): Promise<{ db: { close: () => void; update: (o: string) => void } }> => {
+        .eval((): Promise<{ db: { close: (x: string) => void; update: (o: string) => void } }> => {
           first.eval(evalOrder++);
           return Promise.resolve({
             db: {

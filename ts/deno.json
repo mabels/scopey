@@ -1,0 +1,21 @@
+{
+  "name": "@adviser/scopey",
+  "version": "0.0.0",
+  "license": "AFL-2.0",
+  "exports": {
+    ".": "./src/scopey.ts"
+  },
+  "unstable": ["sloppy-imports"],
+  "lint": {
+    "rules": {
+      "tags": ["recommended"],
+      "exclude": ["no-sloppy-imports"]
+    },
+    "exclude": ["cjs/", "esm/**/*", "node_modules/"]
+  },
+  "imports": {},
+  "exclude": ["cjs/", "esm/**/*", "node_modules/"],
+  "publish": {
+    "include": ["src/**/*.ts", "README.md", "LICENSE"]
+  }
+}

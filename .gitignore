@@ -5,4 +5,4 @@
 **/node_modules/
 **/src/generated/
 smoke/generated/
-smoke/pnpm-lock.yaml
+**/smoke/pnpm-lock.yaml
