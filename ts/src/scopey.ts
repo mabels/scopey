@@ -1,4 +1,4 @@
-import { Result } from "@adviser/result";
+import { Result } from "@adviser/cement";
 
 export interface ScopeyParams {
   readonly log: (...msgs: unknown[]) => void;
@@ -15,18 +15,21 @@ export interface ScopeParams {
 export async function scopey<T>(fn: (scope: Scope) => Promise<T>, params: Partial<ScopeyParams> = {}): Promise<Result<T>> {
   const id = params.id ?? evaId++;
   const scope = new Scope({
-    log: params.log ?? console.error,
+    // eslint-disable-next-line no-console
+    log: params.log ?? console.error.bind(console, `[Scopey ${id}]`), // default log prefix with scope
     id,
   });
-  scope.onCatch(async (err) => {
+  scope.onCatch((err): Promise<void> => {
     if (params.catch) {
-      params.catch(err);
+      return params.catch(err);
     }
+    return Promise.resolve();
   }, -1);
-  scope.onFinally(async () => {
+  scope.onFinally((): Promise<void> => {
     if (params.finally) {
-      params.finally();
+      return params.finally();
     }
+    return Promise.resolve();
   }, -1);
   try {
     return Promise.resolve(Result.Ok(await fn(scope)));
@@ -43,10 +46,16 @@ let evaId = 0;
 export class EvalBuilder<T> {
   readonly scope: Scope;
   readonly evalFn: () => Promise<T>;
-  cleanupFn: (t: WithoutPromise<T>) => Promise<void> = async () => {};
+  cleanupFn: (t: WithoutPromise<T>) => Promise<void> = async () => {
+    /* no-op */
+  };
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  catchFn = async (err: Error): Promise<void> => {};
-  finallyFn: () => Promise<void> = async () => {};
+  catchFn = async (err: Error): Promise<void> => {
+    /* no-op */
+  };
+  finallyFn: () => Promise<void> = async () => {
+    /* no-op */
+  };
   readonly builderId: number;
   #withDropOnSuccess = false;
 
@@ -84,23 +93,23 @@ export class EvalBuilder<T> {
           return this.catchFn(err as Error);
         }, this.builderId);
       } else {
-        this.catchFn(err as Error);
+        await this.catchFn(err as Error);
       }
       throw err;
     } finally {
-      const fn = async () => {
+      const fn = async (): Promise<void> => {
         if (ctx) {
           try {
             await this.cleanupFn(ctx as WithoutPromise<T>);
           } catch (err) {
-            this.scope.params.log(`Scope error in cleanup(${this.scope.params.id}:${this.builderId}): ${err}`);
+            this.scope.params.log(`Scope error in cleanup(${this.scope.params.id}:${this.builderId}): ${err as Error}`);
           }
         }
         await this.finallyFn();
         return;
       };
       if (this.#withDropOnSuccess) {
-        fn();
+        await fn();
       } else {
         this.scope.onFinally(fn, this.builderId);
       }
@@ -132,13 +141,13 @@ export class Scope {
   }
 
   // readonly builders: EvalBuilder<unknown>[] = [];
-  eval<T>(fn: () => Promise<T>): EvalBuilder<T> {
+  eval<T = void>(fn: () => Promise<T>): EvalBuilder<T> {
     const bld = new EvalBuilder<T>(this, fn, this.scopeId++);
     // this.builders.push(bld as EvalBuilder<unknown>);
     return bld;
   }
 
-  _registerWithUnregister<T>(fn: VoidPromiseFn<T>, arr: Array<VoidPromiseFn<never>>, builderId: number): UnregisterFn {
+  _registerWithUnregister<T>(fn: VoidPromiseFn<T>, arr: VoidPromiseFn<never>[], builderId: number): UnregisterFn {
     arr.push(fn);
     const scopeyFn = fn;
     scopeyFn._fnId = this.scopeId++;
@@ -151,17 +160,18 @@ export class Scope {
     };
   }
 
-  readonly cleanups: Array<VoidPromiseFn<never>> = [];
+  readonly cleanups: VoidPromiseFn<never>[] = [];
   onCleanup<T>(fn: VoidPromiseFn<T>, builderId: number): UnregisterFn {
     return this._registerWithUnregister(fn, this.cleanups, builderId);
   }
 
-  readonly catchFns: Array<VoidPromiseFn<unknown | Error>> = [];
-  onCatch(fn: VoidPromiseFn<unknown | Error>, builderId: number): UnregisterFn {
+  // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+  readonly catchFns: VoidPromiseFn<unknown | Error>[] = [];
+  onCatch<T>(fn: VoidPromiseFn<T | Error>, builderId: number): UnregisterFn {
     return this._registerWithUnregister(fn, this.catchFns, builderId);
   }
 
-  readonly finallys: Array<VoidPromiseFn<never>> = [];
+  readonly finallys: VoidPromiseFn<never>[] = [];
   onFinally(fn: VoidPromiseFn<void>, builderId: number): UnregisterFn {
     return this._registerWithUnregister(fn, this.finallys, builderId);
   }
@@ -171,7 +181,7 @@ export class Scope {
       try {
         await fn();
       } catch (err) {
-        this.params.log(`Scope error in finally(${this.params.id}:${fn._builderId}): ${err}`);
+        this.params.log(`Scope error in finally(${this.params.id}:${fn._builderId}): ${err as Error}`);
       }
     }
   }
@@ -181,7 +191,7 @@ export class Scope {
       try {
         await fn(err);
       } catch (err) {
-        this.params.log(`Scope error in catch(${this.params.id}:${fn._builderId}): ${err}`);
+        this.params.log(`Scope error in catch(${this.params.id}:${fn._builderId}): ${err as Error}`);
       }
     }
     return Result.Err(err as Error);

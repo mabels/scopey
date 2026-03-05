@@ -1,8 +1,8 @@
+/* eslint-disable no-console */
 import { scopey } from "@adviser/scopey";
-
 import { open, rm, readFile } from "node:fs/promises";
 
-(async () => {
+async function main(): Promise<void> {
   const rsc = await scopey(async (scope) => {
     const fileHdl = await scope
       .eval(async () => {
@@ -55,4 +55,9 @@ import { open, rm, readFile } from "node:fs/promises";
   }
   await rm("temp-smoke.txt");
   console.log(rsc.Ok());
-})();
+}
+
+main().catch((err) => {
+  console.error("Error in smoke test", err);
+  process.exit(1);
+});
