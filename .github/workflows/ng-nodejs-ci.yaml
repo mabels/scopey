@@ -103,5 +103,6 @@ jobs:
 
       - name: Publish cement JSR
         run: |
-          cd ts/dist/pubdir
+          cd ts
           pnpm run deno:publish
+
