@@ -37,7 +37,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.3.3",
-    "@typescript/native-preview": "7.0.0-dev.20260305.1",
+    "@typescript/native-preview": "7.0.0-dev.20260308.1",
     "cmd-ts": "^0.15.0",
     "deno": "^2.7.4",
     "eslint": "^10.0.2",
