@@ -1,4 +1,5 @@
 import { vi, expect, it } from "vitest";
+import { Result } from "@adviser/cement";
 import { Scope, ScopeIdFn, scopey } from "@adviser/scopey";
 
 function throwsError(id?: string): never {
@@ -1050,6 +1051,42 @@ it("scopy rollback loop with drop", async () => {
   expect(loopCatch.mock.calls).toEqual([[16, new Error("my error")]]);
   expect(top.mock.calls).toEqual([[0]]);
   expect(topCleanup.mock.calls).toEqual([[17, { wurst: 0 }]]);
+});
+
+it("evalResult ok path", async () => {
+  const cleanup = vi.fn();
+  const ret = await scopey(async (scope) => {
+    const value = await scope
+      .evalResult(() => Promise.resolve(Result.Ok({ wurst: 4 })))
+      .cleanup((ctx): Promise<void> => {
+        cleanup(ctx);
+        return Promise.resolve();
+      })
+      .do();
+    return value;
+  });
+  expect(ret.isOk()).toBeTruthy();
+  expect(ret.unwrap()).toEqual({ wurst: 4 });
+  expect(cleanup).toHaveBeenCalledWith({ wurst: 4 });
+});
+
+it("evalResult err path triggers catch and results in Err", async () => {
+  const catchFn = vi.fn();
+  const cleanup = vi.fn();
+  const ret = await scopey(async (scope) => {
+    return await scope
+      .evalResult(() => Promise.resolve(Result.Err(new Error("result error"))))
+      .cleanup(cleanup)
+      .catch((err): Promise<void> => {
+        catchFn((err as Error).message);
+        return Promise.resolve();
+      })
+      .do();
+  });
+  expect(ret.isErr()).toBeTruthy();
+  expect(ret.unwrap_err()).toEqual(new Error("result error"));
+  expect(catchFn).toHaveBeenCalledWith("result error");
+  expect(cleanup).not.toHaveBeenCalled();
 });
 
 it("Test UnRegisterFn", () => {

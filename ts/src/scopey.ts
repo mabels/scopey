@@ -147,6 +147,16 @@ export class Scope {
     return bld;
   }
 
+  evalResult<T>(fn: () => Promise<Result<T>>): EvalBuilder<T> {
+    return this.eval(async () => {
+      const result = await fn();
+      if (result.isErr()) {
+        throw result.Err();
+      }
+      return result.Ok();
+    });
+  }
+
   _registerWithUnregister<T>(fn: VoidPromiseFn<T>, arr: VoidPromiseFn<never>[], builderId: number): UnregisterFn {
     arr.push(fn);
     const scopeyFn = fn;
